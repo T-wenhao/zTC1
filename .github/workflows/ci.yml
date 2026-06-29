@@ -9,7 +9,7 @@ on:
 
 jobs:
   # ============================================
-  # 阶段1: 代码检查
+  # 代码检查
   # ============================================
   code-check:
     name: Code Check
@@ -32,6 +32,12 @@ jobs:
           test -f TC1/main.c && echo "✓ main.c exists" || echo "✗ main.c missing"
           test -f TC1/TC1.mk && echo "✓ TC1.mk exists" || echo "✗ TC1.mk missing"
           test -f build.sh && echo "✓ build.sh exists" || echo "✗ build.sh missing"
+          test -f TC1/main.h && echo "✓ main.h exists" || echo "✗ main.h missing"
+
+      - name: Check version
+        run: |
+          echo "=== Checking version ==="
+          grep -o 'VERSION "[^"]*"' TC1/main.h || echo "VERSION not found"
 
       - name: Check web_data generation script
         run: |
@@ -39,72 +45,32 @@ jobs:
           cd TC1/http_server
           test -f test.py && echo "✓ test.py exists" || echo "✗ test.py missing"
           python3 --version 2>&1 || echo "Python not available for check"
+          python3 test.py > /dev/null 2>&1 && echo "✓ test.py works" || echo "⚠ test.py execution failed"
 
   # ============================================
-  # 阶段2: 固件构建（使用Docker）
-  # ============================================
-  build:
-    name: Build Firmware
-    runs-on: ubuntu-latest
-    needs: code-check
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build MiCO SDK Docker image
-        run: |
-          echo "=== Building MiCO SDK Docker image ==="
-          cd docker
-          docker build -t tcz1/mico-sdk:latest -f Dockerfile.mico-sdk .
-
-      - name: Build firmware using Docker
-        run: |
-          echo "=== Building firmware in Docker ==="
-          chmod +x build.sh
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            tcz1/mico-sdk:latest \
-            bash -c "chmod +x build.sh && ./build.sh"
-
-      - name: Check build artifacts
-        run: |
-          echo "=== Checking build artifacts ==="
-          ls -la build/TC1@MK3031@moc/binary/ || echo "Build artifacts not found"
-          
-      - name: Upload build artifacts
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-${{ github.sha }}
-          path: |
-            build/TC1@MK3031@moc/binary/*.bin
-            build/TC1@MK3031@moc/binary/*.elf
-          retention-days: 30
-
-  # ============================================
-  # 阶段3: 创建Release（仅tag触发）
+  # 创建Release（仅tag触发）
   # ============================================
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: code-check
     if: startsWith(github.ref, 'refs/tags/')
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+      - name: Get version from code
+        id: version
+        run: |
+          VERSION=$(grep -o 'VERSION "[^"]*"' TC1/main.h | cut -d'"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            artifacts/**/*.bin
+          name: "Release ${{ steps.version.outputs.version }}"
           generate_release_notes: true
           draft: false
           prerelease: false
