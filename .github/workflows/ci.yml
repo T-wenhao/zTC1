@@ -46,15 +46,26 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Python 2.7
-        uses: actions/setup-python@v5
-        with:
-          python-version: '2.7'
+        run: |
+          echo "=== Installing Python 2.7 ==="
+          sudo apt-get update
+          sudo apt-get install -y python2.7 python-pip-whl || sudo apt-get install -y python2.7
+          
+          # 创建python软链接
+          sudo ln -sf /usr/bin/python2.7 /usr/bin/python
+          
+          # 安装pip for python2.7
+          curl -sSL https://bootstrap.pypa.io/pip/2.7/get-pip.py -o get-pip.py
+          sudo python2.7 get-pip.py || echo "pip installation failed"
+          
+          python2.7 --version
+          python --version || echo "python command not available"
 
       - name: Install mico-cube
         run: |
           echo "=== Installing mico-cube ==="
-          python -m pip install --upgrade pip
-          python -m pip install mico-cube==1.0.0 || python -m pip install mico-cube
+          python2.7 -m pip install mico-cube==1.0.0 || python2.7 -m pip install mico-cube || \
+            python -m pip install mico-cube==1.0.0 || python -m pip install mico-cube
           mico --version || echo "mico command not available"
 
       - name: Setup MiCO SDK
@@ -75,7 +86,7 @@ jobs:
         run: |
           echo "=== Generating web data ==="
           cd TC1/http_server
-          python test.py > web_data.c
+          python2.7 test.py > web_data.c || python test.py > web_data.c
           echo "Web data generated successfully"
 
       - name: Build firmware
