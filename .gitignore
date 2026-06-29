@@ -3,3 +3,31 @@
 build
 zTC1.*
 *.rar
+
+# Build artifacts
+*.o
+*.elf
+*.bin
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# MiCO SDK
+micoder/
+MiCoder/
+micoder.tar.gz

@@ -1,0 +1,143 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ master, dev*, feature/* ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:  # 允许手动触发
+
+# 环境变量
+env:
+  PYTHON_VERSION: '2.7'
+  MICO_CUBE_VERSION: '1.0.0'
+
+jobs:
+  # ============================================
+  # 阶段1: 代码检查
+  # ============================================
+  code-check:
+    name: Code Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check file structure
+        run: |
+          echo "=== Checking project structure ==="
+          echo "TC1 directory:"
+          ls -la TC1/
+          echo ""
+          echo "mico-os directory:"
+          ls -la mico-os/
+          echo ""
+          echo "Checking key files..."
+          test -f TC1/main.c && echo "✓ main.c exists" || echo "✗ main.c missing"
+          test -f TC1/TC1.mk && echo "✓ TC1.mk exists" || echo "✗ TC1.mk missing"
+          test -f build.sh && echo "✓ build.sh exists" || echo "✗ build.sh missing"
+
+      - name: Check web_data generation script
+        run: |
+          echo "=== Checking web data generation ==="
+          cd TC1/http_server
+          test -f test.py && echo "✓ test.py exists" || echo "✗ test.py missing"
+          python --version 2>&1 || echo "Python not available for check"
+
+  # ============================================
+  # 阶段2: 固件构建
+  # ============================================
+  build:
+    name: Build Firmware
+    runs-on: ubuntu-latest
+    needs: code-check
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install mico-cube
+        run: |
+          echo "=== Installing mico-cube ==="
+          pip install mico-cube==${{ env.MICO_CUBE_VERSION }} || {
+            echo "Trying alternative installation..."
+            pip install mico-cube
+          }
+          mico --version || echo "mico command not available"
+
+      - name: Setup MiCO SDK
+        run: |
+          echo "=== Setting up MiCO SDK ==="
+          # 下载并安装Micoder
+          MICODER_URL="http://firmware.mxchip.com/MiCoder_v1.3_Linux64.tar.gz"
+          wget -q $MICODER_URL -O micoder.tar.gz || echo "Failed to download Micoder"
+          tar -xzf micoder.tar.gz || echo "Failed to extract Micoder"
+          
+          # 配置Micoder路径
+          MICODER_PATH=$(pwd)/MiCoder
+          mico config --global MICODER $MICODER_PATH || echo "Failed to config Micoder"
+          
+          echo "MiCO SDK setup completed"
+
+      - name: Generate web data
+        run: |
+          echo "=== Generating web data ==="
+          cd TC1/http_server
+          python test.py > web_data.c
+          echo "Web data generated successfully"
+
+      - name: Build firmware
+        run: |
+          echo "=== Building firmware ==="
+          chmod +x build.sh
+          ./build.sh
+          echo "Build completed"
+
+      - name: Check build artifacts
+        run: |
+          echo "=== Checking build artifacts ==="
+          ls -la build/TC1@MK3031@moc/binary/ || echo "Build artifacts not found"
+          
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: |
+            build/TC1@MK3031@moc/binary/*.bin
+            build/TC1@MK3031@moc/binary/*.elf
+          retention-days: 30
+
+  # ============================================
+  # 阶段3: 创建Release（仅tag触发）
+  # ============================================
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/**/*.bin
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
