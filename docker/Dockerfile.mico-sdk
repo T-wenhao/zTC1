@@ -4,6 +4,8 @@
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # 安装基础依赖
 RUN apt-get update && apt-get install -y \
@@ -12,20 +14,29 @@ RUN apt-get update && apt-get install -y \
     git \
     python3 \
     python3-pip \
+    python3-setuptools \
     unzip \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装mico-cube（忽略错误，后续步骤会处理）
-RUN pip3 install mico-cube || echo "mico-cube installation failed, continuing..."
+# 安装mico-cube
+RUN pip3 install --break-system-packages mico-cube || \
+    pip3 install mico-cube || \
+    echo "mico-cube installation failed, will try alternative"
 
-# 下载并安装Micoder（忽略错误）
-RUN wget -q http://firmware.mxchip.com/MiCoder_v1.3_Linux64.tar.gz -O /tmp/micoder.tar.gz || \
-    echo "Failed to download Micoder, continuing without it..."
-RUN if [ -f /tmp/micoder.tar.gz ]; then \
-    tar -xzf /tmp/micoder.tar.gz -C /opt/ || echo "Failed to extract Micoder"; \
-    rm -f /tmp/micoder.tar.gz; \
-    fi
+# 验证mico命令
+RUN mico --version || echo "mico command not available"
+
+# 下载并安装Micoder
+RUN wget -q http://firmware.mxchip.com/MiCoder_v1.3_Linux64.tar.gz -O /tmp/micoder.tar.gz && \
+    tar -xzf /tmp/micoder.tar.gz -C /opt/ && \
+    rm /tmp/micoder.tar.gz && \
+    echo "Micoder installed successfully" || \
+    echo "Failed to install Micoder"
+
+# 配置Micoder路径（如果存在）
+ENV MICODER=/opt/MiCoder
+ENV PATH="${MICODER}:${PATH}"
 
 # 设置工作目录
 WORKDIR /workspace
