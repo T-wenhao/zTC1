@@ -34,11 +34,11 @@ jobs:
           grep -o 'VERSION "[^"]*"' TC1/main.h || echo "VERSION not found"
 
   # ============================================
-  # 固件构建
+  # 固件构建（使用Ubuntu 20.04）
   # ============================================
   build:
     name: Build Firmware
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04  # 使用Ubuntu 20.04，它支持Python 2.7
     needs: code-check
     
     steps:
@@ -49,14 +49,10 @@ jobs:
         run: |
           echo "=== Installing Python 2.7 ==="
           sudo apt-get update
-          sudo apt-get install -y python2.7 python-pip-whl || sudo apt-get install -y python2.7
+          sudo apt-get install -y python2.7 python-pip
           
           # 创建python软链接
           sudo ln -sf /usr/bin/python2.7 /usr/bin/python
-          
-          # 安装pip for python2.7
-          curl -sSL https://bootstrap.pypa.io/pip/2.7/get-pip.py -o get-pip.py
-          sudo python2.7 get-pip.py || echo "pip installation failed"
           
           python2.7 --version
           python --version || echo "python command not available"
@@ -64,8 +60,7 @@ jobs:
       - name: Install mico-cube
         run: |
           echo "=== Installing mico-cube ==="
-          python2.7 -m pip install mico-cube==1.0.0 || python2.7 -m pip install mico-cube || \
-            python -m pip install mico-cube==1.0.0 || python -m pip install mico-cube
+          python2.7 -m pip install mico-cube==1.0.0 || python2.7 -m pip install mico-cube
           mico --version || echo "mico command not available"
 
       - name: Setup MiCO SDK
