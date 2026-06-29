@@ -7,11 +7,6 @@ on:
     branches: [ master ]
   workflow_dispatch:  # 允许手动触发
 
-# 环境变量
-env:
-  PYTHON_VERSION: '3.11'
-  MICO_CUBE_VERSION: '1.0.0'
-
 jobs:
   # ============================================
   # 阶段1: 代码检查
@@ -43,62 +38,33 @@ jobs:
           echo "=== Checking web data generation ==="
           cd TC1/http_server
           test -f test.py && echo "✓ test.py exists" || echo "✗ test.py missing"
-          python --version 2>&1 || echo "Python not available for check"
+          python3 --version 2>&1 || echo "Python not available for check"
 
   # ============================================
-  # 阶段2: 固件构建（可选，需要完整MiCO SDK环境）
+  # 阶段2: 固件构建（使用Docker）
   # ============================================
   build:
     name: Build Firmware
     runs-on: ubuntu-latest
     needs: code-check
-    continue-on-error: true  # 允许失败，因为需要完整SDK环境
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install mico-cube
+      - name: Build MiCO SDK Docker image
         run: |
-          echo "=== Installing mico-cube ==="
-          pip install mico-cube==${{ env.MICO_CUBE_VERSION }} || {
-            echo "Trying alternative installation..."
-            pip install mico-cube
-          }
-          mico --version || echo "mico command not available"
+          echo "=== Building MiCO SDK Docker image ==="
+          cd docker
+          docker build -t tcz1/mico-sdk:latest -f Dockerfile.mico-sdk .
 
-      - name: Setup MiCO SDK
+      - name: Build firmware using Docker
         run: |
-          echo "=== Setting up MiCO SDK ==="
-          # 下载并安装Micoder
-          MICODER_URL="http://firmware.mxchip.com/MiCoder_v1.3_Linux64.tar.gz"
-          wget -q $MICODER_URL -O micoder.tar.gz || echo "Failed to download Micoder"
-          tar -xzf micoder.tar.gz || echo "Failed to extract Micoder"
-          
-          # 配置Micoder路径
-          MICODER_PATH=$(pwd)/MiCoder
-          mico config --global MICODER $MICODER_PATH || echo "Failed to config Micoder"
-          
-          echo "MiCO SDK setup completed"
-
-      - name: Generate web data
-        run: |
-          echo "=== Generating web data ==="
-          cd TC1/http_server
-          python test.py > web_data.c
-          echo "Web data generated successfully"
-
-      - name: Build firmware
-        run: |
-          echo "=== Building firmware ==="
-          chmod +x build.sh
-          ./build.sh
-          echo "Build completed"
+          echo "=== Building firmware in Docker ==="
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            tcz1/mico-sdk:latest \
+            bash -c "./build.sh"
 
       - name: Check build artifacts
         run: |

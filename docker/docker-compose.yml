@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  mico-sdk:
+    build:
+      context: .
+      dockerfile: Dockerfile.mico-sdk
+    image: tcz1/mico-sdk:latest
+    volumes:
+      - ../:/workspace
+    working_dir: /workspace
+    command: /bin/bash
