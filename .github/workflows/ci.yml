@@ -61,10 +61,11 @@ jobs:
       - name: Build firmware using Docker
         run: |
           echo "=== Building firmware in Docker ==="
+          chmod +x build.sh
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             tcz1/mico-sdk:latest \
-            bash -c "./build.sh"
+            bash -c "chmod +x build.sh && ./build.sh"
 
       - name: Check build artifacts
         run: |
